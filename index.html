@@ -21,6 +21,7 @@ pre{white-space:pre-wrap;font:13px/1.4 system-ui;max-height:150px;overflow:auto;
 <label>Code<input id="c" placeholder="ABC123" maxlength="6" autocapitalize="characters"></label>
 <button class="p" id="go">Beitreten</button></div>
 <div id="s"></div><div id="g"></div><div id="lw"></div>
+<div id="ex" hidden><button id="xb">Spiel verlassen</button></div>
 <div id="cw" hidden><button id="cb">Call &amp; Chat</button><div id="cp" hidden>
 <div class="row"><button id="mc">Mikro an</button><button id="cm">Kamera an</button></div>
 <div id="vd" class="row"></div><div id="pe"></div><pre id="cl"></pre>
@@ -29,20 +30,20 @@ pre{white-space:pre-wrap;font:13px/1.4 system-ui;max-height:150px;overflow:auto;
 const $=i=>document.getElementById(i),S=t=>$('s').textContent=t,G=h=>$('g').innerHTML=h,
 E=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),
 f=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
-let B,C,tk=0;
+let B,C,tk=0,TK=null;
 const post=async(p,o)=>{try{return await(await fetch(B+p,{method:'POST',body:JSON.stringify({code:C,...o})})).json()}catch(e){return{error:'connection_failed'}}},
 get=async p=>{try{return await(await fetch(B+p)).json()}catch(e){return{error:'connection_failed'}}},
 poll=(fn,ms=700)=>{const k=++tk;(async function run(){await fn();if(k==tk)setTimeout(run,ms)})()},
 ctl=k=>k.aborted?'Die Partie wurde abgebrochen.':k.resigned?(k.resigned=='w'?'Weiß':'Schwarz')+' gibt auf.':k.timeout?(k.timeout=='w'?'Weiß':'Schwarz')+' hat die Zeit überschritten.':'',
 clk=(s,j)=>j.timer_enabled&&s.clock?' ⏱ Weiß '+f(s.clock.w)+' · Schwarz '+f(s.clock.b):'',
 resign=on=>{$('lw').innerHTML='<button id="rs">Aufgeben</button>';$('rs').onclick=async()=>{if(confirm('Wirklich aufgeben?')){await post('/control',{action:'resign',color:'b'});$('lw').innerHTML='';on()}}},
-leave=tok=>{$('lw').innerHTML='<button id="lv">Verlassen</button>';$('lv').onclick=async()=>{await post('/leave',{token:tok});tk++;G('');$('lw').innerHTML='';S('Du hast die Partie verlassen.')}};
+leave=tok=>{};
 
 $('go').onclick=async()=>{let a=$('a').value.trim();C=$('c').value.trim().toUpperCase();if(!a||!C)return S('Bitte Adresse und Code eingeben.');
  if(!/^https?:\/\//.test(a))a=(/^(\d|localhost)/.test(a)?'http://':'https://')+a;B=a.replace(/\/+$/,'');S('Verbinde…');
  const r=await post('/join',{});
  if(!r.ok)return S({wrong_code:'Falscher Code.',full:'Die Partie ist voll.',started:'Die Partie läuft schon.',connection_failed:'Host nicht erreichbar – Adresse prüfen. (Auf einer https-Seite braucht der Host eine https-Adresse.)'}[r.error]||'Fehlgeschlagen: '+r.error);
- $('j').hidden=true;S('');({muehle:muehle,ludo:ludo,binokel:binokel}[r.game]||chess)(r);const st=await get('/state');if(st.call&&st.call.enabled)$('cw').hidden=false};
+ $('j').hidden=true;S('');TK=r.token||null;$('ex').hidden=false;({muehle:muehle,ludo:ludo,binokel:binokel}[r.game]||chess)(r);const st=await get('/state');if(st.call&&st.call.enabled)$('cw').hidden=false};
 
 /* ---------- Schach (du spielst Schwarz) ---------- */
 const OP=c=>c=='w'?'b':'w',IB=(r,c)=>r>=0&&r<8&&c>=0&&c<8,cl=g=>JSON.parse(JSON.stringify(g)),
@@ -81,7 +82,7 @@ function chess(j){const b=[...Array(8)].map(()=>Array(8).fill(null)),K='RNBQKBNR
  const draw=()=>{let h='<div id="ch">';for(let i=0;i<64;i++){const r=7-(i>>3),c=7-(i&7),p=g.b[r][c],L=g.last;
   h+=`<div class="${(r+c)&1?'d':'l'}${sel&&sel[0]==r&&sel[1]==c?' sel':''}${tg.some(m=>m.r==r&&m.c==c)?' tg':''}${L&&((L[0]==r&&L[1]==c)||(L[2]==r&&L[3]==c))?' lm':''}" data-r="${r}" data-c="${c}">${p?GL[p.c+p.t]:''}</div>`}
   G(h+'</div>'+(pend?'<div class="row">Umwandeln in: '+['Q','R','B','N'].map(t=>`<button data-pr="${t}">${GL['b'+t]}</button>`).join('')+'</div>':''));
-  S(over||(g.turn==me?'Du bist am Zug (Schwarz).':'Weiß ist am Zug…')+(att(g,g.kp[g.turn][0],g.kp[g.turn][1],g.turn)?' Schach!':'')+cs)},
+  if(over)endBtn();S(over||(g.turn==me?'Du bist am Zug (Schwarz).':'Weiß ist am Zug…')+(att(g,g.kp[g.turn][0],g.kp[g.turn][1],g.turn)?' Schach!':'')+cs)},
  fin=()=>{const t=g.turn;for(let r=0;r<8;r++)for(let c=0;c<8;c++)if(g.b[r][c]&&g.b[r][c].c==t&&lg(g,r,c).length)return;
   over=att(g,g.kp[t][0],g.kp[t][1],t)?(t=='w'?'Schwarz':'Weiß')+' gewinnt durch Schachmatt.':'Patt – Remis.'},
  send=async(r,c,m)=>{busy=1;sel=null;tg=[];draw();const x=await post('/move',{index:n,r,c,m});if(!x.ok){busy=0;S('Zug konnte nicht gesendet werden.')}};
@@ -109,11 +110,21 @@ function muehle(j){const X=[],A=[],M=[],me='b';
  rm=(b,o)=>{const ps=[...b.keys()].filter(i=>b[i]==o),fr=ps.filter(p=>!mill(b,p,o));return fr.length?fr:ps},
  play=(a,t,x)=>{const c=turn,o=OP(c),W=c=='w'?'Weiß':'Schwarz';if(a<0)H[hi(c)]--;else bd[a]=null;bd[t]=c;if(x>=0)bd[x]=null;last=[a,t,x];n++;turn=o;qt=(a<0||x>=0)?0:qt+1;const k=ky();sn[k]=(sn[k]||0)+1;
   if(cnt(bd,o)+H[hi(o)]<3)over=W+' gewinnt – nur noch zwei Steine.';else if(!steps(o).length)over=W+' gewinnt – Gegner blockiert.';else if(sn[k]>=3)over='Unentschieden durch dreifache Stellungswiederholung.';else if(qt>=100)over='Unentschieden: 100 Halbzüge ohne Mühle.'},
- draw=()=>{let s='<svg viewBox="0 0 360 360"><g stroke="currentColor" stroke-width="3" fill="none">'+[0,1,2].map(o=>`<rect x="${30+o*50}" y="${30+o*50}" width="${300-o*100}" height="${300-o*100}"/>`).join('')+'<path d="M180 30v100M180 230v100M30 180h100M230 180h100"/></g>';
-  X.forEach(([x,y],i)=>{const k=pend?(rem.includes(i)?'#d33':''):sel===i?'#26d':tg.includes(i)?'#3a3':last&&last[1]==i?'#e80':'';
-   s+=`<circle data-p="${i}" cx="${30+x*50}" cy="${30+y*50}" r="16" fill="${bd[i]=='w'?'#f4f4f4':bd[i]=='b'?'#222':'rgba(128,128,128,.3)'}" stroke="${k||'#888'}" stroke-width="${k?5:2}"/>`});
+ draw=()=>{const m=40,cl=(400-2*m)/6,P=i=>[m+X[i][0]*cl,m+(6-X[i][1])*cl],AC='#b8853a',rad=cl*.31,ci=(i,r,st,w,x='')=>{const[px,py]=P(i);return`<circle cx="${px}" cy="${py}" r="${r}" fill="none" stroke="${st}" stroke-width="${w}" ${x}/>`};
+  let s=`<svg viewBox="0 0 400 400"><rect x="0" y="0" width="400" height="400" rx="12" fill="#cf9f5f" stroke="#7a5528" stroke-width="2"/>`;
+  A.forEach((q,i)=>q.forEach(j=>{if(i<j){const[a,b]=P(i),[c,d]=P(j);s+=`<line x1="${a}" y1="${b}" x2="${c}" y2="${d}" stroke="#4d3115" stroke-width="3" stroke-linecap="round"/>`}}));
+  X.forEach((_,i)=>{const[x,y]=P(i);s+=`<circle cx="${x}" cy="${y}" r="4" fill="#4d3115"/>`});
+  for(let k=0;k<7;k++)s+=`<text x="${m+k*cl}" y="${400-m*.32}" fill="#5a3d1b" font-size="${cl*.2}" text-anchor="middle" dominant-baseline="middle">${'abcdefg'[k]}</text><text x="${m*.32}" y="${m+(6-k)*cl}" fill="#5a3d1b" font-size="${cl*.2}" text-anchor="middle" dominant-baseline="middle">${k+1}</text>`;
+  M.forEach(ml=>{const c=bd[ml[0]];if(c&&bd[ml[1]]==c&&bd[ml[2]]==c){const[a,b]=P(ml[0]),[x,y]=P(ml[2]);s+=`<line x1="${a}" y1="${b}" x2="${x}" y2="${y}" stroke="${AC}" stroke-width="6" stroke-linecap="round"/>`}});
+  if(last){if(last[0]>=0)s+=ci(last[0],rad,AC,3,'stroke-dasharray="3 3"');if(last[2]>=0){const[px,py]=P(last[2]),d=rad*.7;s+=`<path d="M${px-d} ${py-d}L${px+d} ${py+d}M${px-d} ${py+d}L${px+d} ${py-d}" stroke="#c0392b" stroke-width="5" stroke-linecap="round"/>`}}
+  tg.forEach(t=>{const[px,py]=P(t);s+=`<circle cx="${px}" cy="${py}" r="${cl*.16}" fill="#c2914b" stroke="${AC}" stroke-width="2"/>`});
+  bd.forEach((c,i)=>{if(c){const[px,py]=P(i);s+=`<circle cx="${px}" cy="${py}" r="${rad}" fill="${c=='w'?'#f6efdc':'#2a211a'}" stroke="${c=='w'?'#6b5430':'#0c0904'}" stroke-width="2"/>`}});
+  if(last)s+=ci(last[1],rad*1.22,AC,3);
+  if(pend)rem.forEach(i=>s+=ci(i,rad*1.28,'#c0392b',4));
+  if(sel!=null)s+=ci(sel,rad*1.28,AC,5);
+  X.forEach((_,i)=>{const[px,py]=P(i);s+=`<circle data-p="${i}" cx="${px}" cy="${py}" r="${cl*.48}" fill="transparent"/>`});
   G(s+`</svg><p>Noch zu setzen – Weiß: ${H[0]} · Schwarz: ${H[1]}</p>`);
-  S(over||(turn==me?'Du bist dran (Schwarz): '+(pend?'gegnerischen Stein entfernen.':{p:'Stein setzen.',m:'Stein ziehen.',f:'Stein springen.'}[ph(me)]):'Weiß ist dran…')+cs)},
+  if(over)endBtn();S(over||(turn==me?'Du bist dran (Schwarz): '+(pend?'gegnerischen Stein entfernen.':{p:'Stein setzen.',m:'Stein ziehen.',f:'Stein springen.'}[ph(me)]):'Weiß ist dran…')+cs)},
  send=async(a,t,x)=>{busy=1;pend=null;rem=[];sel=null;tg=[];draw();const r=await post('/move',{index:n,r:a,c:t,m:{x}});if(!r.ok){busy=0;S('Zug konnte nicht gesendet werden.')}},
  ch=(a,t)=>{const nb=bd.slice();if(a>=0)nb[a]=null;nb[t]=me;if(mill(nb,t,me)){pend=[a,t];rem=rm(nb,'w');sel=null;tg=[];draw()}else send(a,t,-1)};
  sn[ky()]=1;
@@ -138,7 +149,7 @@ function ludo(j){const tok=j.token;let me=null;leave(tok);
  $('g').onclick=async e=>{const t=e.target.closest('[data-i]');
   if(t)post('/move',{token:tok,piece:+t.dataset.i});else if(e.target.id=='rl')post('/roll',{token:tok});
   else if(e.target.dataset.c){const x=await post('/pick',{token:tok,color:e.target.dataset.c});if(x.ok)me=x.color;else S('Diese Farbe ist schon vergeben.')}};
- poll(async()=>{const s=await get('/state');if(s.error)return S('Verbindung unterbrochen – versuche erneut…');if(s.aborted)return S('Die Partie wurde beendet.');
+ poll(async()=>{const s=await get('/state');if(s.error)return S('Verbindung unterbrochen – versuche erneut…');if(s.aborted){endBtn();return S('Die Partie wurde beendet.')}
   const g=s.game;
   if(!s.started||!g){const tk2=s.seats.map(x=>x.color);
    G(me?`<p>Du spielst ${LN[me]}.</p>`:'<p>Wähle deine Farbe:</p><div class="row">'+LS.filter(c=>!tk2.includes(c)).map(c=>`<button data-c="${c}" style="background:${LC[c]};color:#fff">${LN[c]}</button>`).join('')+'</div>');
@@ -150,7 +161,7 @@ function ludo(j){const tok=j.token;let me=null;leave(tok);
   g.players.forEach(c=>g.pieces[c].forEach((p,i)=>{const[x,y]=lc(c,i,p),k=mv&&c==me?(p<0?(hs!==undefined?hs:-1):(g.legal.includes(i)?i:-1)):-1;
    h+=`<circle ${k>=0?`data-i="${k}" `:''}cx="${x*40+20}" cy="${y*40+20}" r="15" fill="${LC[c]}" stroke="${k>=0?'#000':'#fff'}" stroke-width="${k>=0?5:2}" style="cursor:pointer"/>`}));
   G(h+`</svg><p>Würfel: ${g.dice||'–'}</p>`+(my&&g.phase=='roll'&&!g.winner?`<button class="p" id="rl">Würfeln${g.rolls_left>1?' ('+g.rolls_left+' Versuche)':''}</button>`:'')+`<pre>${g.log.slice(-4).map(E).join('\n')}</pre>`);
-  S(g.winner?LN[g.winner]+' hat gewonnen!':my?(g.phase=='roll'?'Du bist dran – würfle!':'Wähle eine markierte Figur.'):LN[g.turn]+' ist dran…')})}
+  if(g.winner)endBtn();S(g.winner?LN[g.winner]+' hat gewonnen!':my?(g.phase=='roll'?'Du bist dran – würfle!':'Wähle eine markierte Figur.'):LN[g.turn]+' ist dran…')})}
 
 /* ---------- Binokel ---------- */
 function binokel(j){const tok=j.token,SN={E:'Eichel',L:'Laub',H:'Herz',S:'Schellen'},SC={E:'#8a5a2b',L:'#2f8a45',H:'#c0392b',S:'#d9a21b'},SU='ELHS',RK=['U','O','K','10','A'],
@@ -186,7 +197,7 @@ function binokel(j){const tok=j.token,SN={E:'Eichel',L:'Laub',H:'Herz',S:'Schell
   else if(dab)h+=`<p>Wähle 4 Karten zum Drücken (${sel.length}/4) und Trumpf oder Durch.</p><p>${dabInfo(hand)}</p><div class="row">${[...SU].map(s=>`<button data-t="${s}" style="${tr==s?'background:'+SC[s]+';color:#fff':''}">${SN[s]}</button>`).join('')}</div><div class="row">${['durch','durch_open','unten','unten_open'].map(m=>`<button data-t="${m}" class="${tr==m?'p':''}">${DN[m]}</button>`).join('')}</div><div class="row"><button class="p" data-a="fin" ${sel.length==4&&tr?'':'disabled'}>Drücken &amp; spielen</button><button data-a="giveup">Abgehen (−${v.bid_value})</button></div>`;
   else if(st=='round_over')h+=sm+(v.ready.includes(me)?'<p>Warte auf die anderen…</p>':'<button class="p" data-a="ready">Nächste Runde</button>');
   else if(st=='game_over')h+=sm+`<p><b>${v.final?E(v.final.team_names)+' gewinnt die Partie!':''}</b></p>`;
-  G(h+`<pre>${v.log.slice(-8).map(E).join('\n')}</pre>`);
+  if(st=='game_over')endBtn();G(h+`<pre>${v.log.slice(-8).map(E).join('\n')}</pre>`);
   S(st=='game_over'?'Partie beendet.':st=='round_over'?'Runde beendet.':act||(st!='play'&&v.declarer==me&&st!='bid')?'Du bist dran!':'Warte auf '+(v.names[v.active]||'…'))},
  lobby=s=>{if(!$('nn')){G('<input id="nn" maxlength="16" placeholder="Dein Name"><button class="p" id="sv">Namen speichern</button><p id="sl"></p>');
    $('sv').onclick=async()=>{const x=await post('/pick',{token:tok,name:$('nn').value});S(x.ok?'Name gespeichert.':x.error=='name_taken'?'Name schon vergeben.':'Fehler: '+x.error)}}
@@ -204,7 +215,7 @@ function binokel(j){const tok=j.token,SN={E:'Eichel',L:'Laub',H:'Herz',S:'Schell
   else if(a=='fin'){const nt=SU.includes(tr),hd=srt(V.hand),lo=nt?lost(hd,sel,tr):[];if(lo.length&&!confirm('Diese Meldungen gehen verloren:\n'+lo.map(x=>x[0]+' '+x[1]).join('\n')+'\nTrotzdem drücken?'))return;go('finish_dabb',{cards:sel.map(i=>hd[i]),trump:nt?tr:'',mode:nt?'normal':tr})}
   else if(a=='giveup'){if(confirm('Wirklich abgehen?'))go('give_up')}else if(a=='ready')go('ready')};
  poll(async()=>{const s=await get('/state?token='+encodeURIComponent(tok));if(s.error)return S('Verbindung unterbrochen – versuche erneut…');
-  if(s.aborted){S('Die Partie wurde beendet.');return}
+  if(s.aborted){endBtn();S('Die Partie wurde beendet.');return}
   if(!s.started||!s.view)return lobby(s);cur=s.view;r(cur)})}
 
 /* ---------- Call & Chat ---------- */
@@ -243,4 +254,11 @@ $('cm').onclick=async()=>{if(CL.cam){clearInterval(CL.cam.t);CL.cam.st.getTracks
   const t=setInterval(()=>{cv.getContext('2d').drawImage(v,0,0,240,180);cv.toBlob(async b=>{if(b)CL.ov=new Uint8Array(await b.arrayBuffer())},'image/jpeg',.55)},200);CL.cam={st,t};$('cm').textContent='Kamera aus'}
  catch(e){alert('Kein Zugriff auf die Kamera.')}};
 addEventListener('pagehide',()=>{if(CL&&CL.pid)navigator.sendBeacon(B+'/m/leave?code='+enc(C)+'&pid='+CL.pid,'{}')});
+const exitGame=async ask=>{if(ask&&!confirm('Spiel wirklich verlassen?'))return;if(TK)await post('/leave',{token:TK});
+ if(CL){try{await fetch(B+'/m/leave?code='+enc(C)+'&pid='+CL.pid,{method:'POST',body:'{}'})}catch(e){}
+  if(CL.mic){CL.mic.st.getTracks().forEach(t=>t.stop());CL.mic.c.close()}if(CL.cam){clearInterval(CL.cam.t);CL.cam.st.getTracks().forEach(t=>t.stop())}
+  try{CL.ac.close()}catch(e){}CL=null}
+ tk++;TK=null;G('');S('');$('lw').innerHTML='';$('cw').hidden=true;$('cp').hidden=true;$('vd').innerHTML='';$('ex').hidden=true;$('j').hidden=false};
+$('xb').onclick=()=>exitGame(true);
+const endBtn=()=>{if(!$('eb')){$('lw').innerHTML='<button class="p" id="eb">Zurück zum Start</button>';$('eb').onclick=()=>exitGame(false)}};
 </script></body></html>
